@@ -6,12 +6,14 @@ public class GachaSystem : MonoBehaviour
 {
     public Button quickPullButton;
     public Button testYourSkillsButton;
-    public Button quickPullX10Button;  
-    public Button testYourSkillsX10Button;  
+    public Button quickPullX10Button;
+    public Button testYourSkillsX10Button;
 
     private int totalPulls = 0;
     private Dictionary<string, int> unitCounts = new Dictionary<string, int> { { "mech", 0 }, { "idol", 0 }, { "cat", 0 } };
+    private Dictionary<string, int> lastUnitCounts = new Dictionary<string, int> { { "mech", 0 }, { "idol", 0 }, { "cat", 0 } };
     private Dictionary<string, int> rarityCounts = new Dictionary<string, int> { { "Common", 0 }, { "Rare", 0 }, { "UltraRare", 0 } };
+    private Dictionary<string, int> lastSpinCounts = new Dictionary<string, int> { { "Common", 0 }, { "Rare", 0 }, { "UltraRare", 0 } };
 
     // Odds
     private float oddsCommon = 0.90f;
@@ -29,49 +31,54 @@ public class GachaSystem : MonoBehaviour
         quickPullX10Button.onClick.AddListener(() => QuickPull(true));
         testYourSkillsX10Button.onClick.AddListener(() => TestYourSkills(true));
     }
+
     private void AdjustOdds()
     {
-        // Example adjustment logic: increase the chance for underrepresented unit types
-        // Calculate the total number of units pulled
-        int totalUnitsPulled = unitCounts["mech"] + unitCounts["idol"] + unitCounts["cat"];
-        if (totalUnitsPulled == 0) return;  // Avoid division by zero in a fresh game
+        // Ensure there were pulls last round to avoid division by zero and unnecessary adjustments
+        int totalLastSpins = lastSpinCounts["Common"] + lastSpinCounts["Rare"] + lastSpinCounts["UltraRare"];
+        if (totalLastSpins == 0) return;
 
-        float mechRatio = (float)unitCounts["mech"] / totalUnitsPulled;
-        float idolRatio = (float)unitCounts["idol"] / totalUnitsPulled;
-        float catRatio = (float)unitCounts["cat"] / totalUnitsPulled;
+        // Find the majority and least units pulled last spin
+        string maxRarity = "Common", minRarity = "Common";
+        int maxCount = -1, minCount = int.MaxValue;
 
-        // Adjust odds based on the ratio
-        // Assume you want each type to ideally be about 33%, you can adjust odds accordingly
-        if (mechRatio > 0.33f) AdjustSpecificOdds("mech", -0.05f); // Reduce mech odds if there are too many
-        if (idolRatio > 0.33f) AdjustSpecificOdds("idol", -0.05f); // Reduce idol odds if there are too many
-        if (catRatio > 0.33f) AdjustSpecificOdds("cat", -0.05f);   // Reduce cat odds if there are too many
+        foreach (var rarity in lastSpinCounts)
+        {
+            if (rarity.Value > maxCount)
+            {
+                maxCount = rarity.Value;
+                maxRarity = rarity.Key;
+            }
+            if (rarity.Value < minCount)
+            {
+                minCount = rarity.Value;
+                minRarity = rarity.Key;
+            }
+        }
 
-        // Similarly, increase odds if too low
-        if (mechRatio < 0.33f) AdjustSpecificOdds("mech", 0.05f);
-        if (idolRatio < 0.33f) AdjustSpecificOdds("idol", 0.05f);
-        if (catRatio < 0.33f) AdjustSpecificOdds("cat", 0.05f);
+        // Avoid adjustments if all are equal or no pulls
+        if (maxRarity == minRarity) return;
+
+        // Adjusting odds, considering base odds to ensure they don't go out of plausible range
+        float adjustAmount = 0.01f;  // Small adjustment to make the impact gradual
+        if (maxRarity == "Common" && oddsCommon > 0.85f)  // Ensuring odds don't fall below a minimum threshold
+            oddsCommon -= adjustAmount;
+        else if (maxRarity == "Rare" && oddsRare > 0.05f)
+            oddsRare -= adjustAmount;
+        else if (maxRarity == "UltraRare" && oddsUltraRare > 0.01f)
+            oddsUltraRare -= adjustAmount;
+
+        if (minRarity == "Common" && oddsCommon < 0.95f)  // Ensuring odds don't exceed a maximum threshold
+            oddsCommon += adjustAmount;
+        else if (minRarity == "Rare" && oddsRare < 0.10f)
+            oddsRare += adjustAmount;
+        else if (minRarity == "UltraRare" && oddsUltraRare < 0.03f)
+            oddsUltraRare += adjustAmount;
     }
-
-    private void AdjustSpecificOdds(string unitType, float adjustment)
-    {
-        // Adjusting specific odds for each type
-        if (unitType == "mech")
-        {
-            oddsCommon += adjustment;
-        }
-        else if (unitType == "idol")
-        {
-            oddsRare += adjustment;
-        }
-        else if (unitType == "cat")
-        {
-            oddsUltraRare += adjustment;
-        }
-    }
-
 
     public void QuickPull(bool isTenPull)
     {
+        ResetLastSpinCounts();
         totalPulls += isTenPull ? 10 : 1;
         AdjustOdds();
         for (int i = 0; i < (isTenPull ? 10 : 1); i++)
@@ -86,6 +93,7 @@ public class GachaSystem : MonoBehaviour
 
     public void TestYourSkills(bool isTenPull)
     {
+        ResetLastSpinCounts();
         totalPulls += isTenPull ? 10 : 1;
         AdjustOdds();
         float[] chosenOdds = Random.value > 0.5f ? successOdds : failureOdds;
@@ -100,6 +108,16 @@ public class GachaSystem : MonoBehaviour
         PrintCounts();
     }
 
+    private void ResetLastSpinCounts()
+    {
+        lastSpinCounts["Common"] = 0;
+        lastSpinCounts["Rare"] = 0;
+        lastSpinCounts["UltraRare"] = 0;
+        lastUnitCounts["mech"] = 0;
+        lastUnitCounts["idol"] = 0;
+        lastUnitCounts["cat"] = 0;
+    }
+
     private void PullGacha(float commonOdds, float rareOdds, float ultraRareOdds)
     {
         float pull = Random.value;
@@ -109,31 +127,30 @@ public class GachaSystem : MonoBehaviour
         if (pull < ultraRareOdds)
         {
             rarity = "UltraRare";
-            Debug.Log("Pulled an Ultra Rare " + type + "!");
         }
         else if (pull < ultraRareOdds + rareOdds)
         {
             rarity = "Rare";
-            Debug.Log("Pulled a Rare " + type + "!");
         }
         else
         {
             rarity = "Common";
-            Debug.Log("Pulled a Common " + type + "!");
         }
 
         unitCounts[type]++;
         rarityCounts[rarity]++;
+        lastSpinCounts[rarity]++;
+        lastUnitCounts[type]++;
     }
 
     private void PrintCounts()
     {
-        Debug.Log("Unit Counts:");
-        foreach (var pair in unitCounts)
-            Debug.Log(pair.Key + ": " + pair.Value);
+        // Logging counts for each rarity from the last spin and the total
+        Debug.Log($"Last Spin - Common: {lastSpinCounts["Common"]}, Rare: {lastSpinCounts["Rare"]}, UltraRare: {lastSpinCounts["UltraRare"]}; " +
+                  $"Total - Common: {rarityCounts["Common"]}, Rare: {rarityCounts["Rare"]}, UltraRare: {rarityCounts["UltraRare"]}");
 
-        Debug.Log("Rarity Counts:");
-        foreach (var pair in rarityCounts)
-            Debug.Log(pair.Key + ": " + pair.Value);
+        // Logging counts for each unit type from the last spin and the total
+        Debug.Log($"Last Spin - Mech: {lastUnitCounts["mech"]}, Idol: {lastUnitCounts["idol"]}, Cat: {lastUnitCounts["cat"]}; " +
+                  $"Total - Mech: {unitCounts["mech"]}, Idol: {unitCounts["idol"]}, Cat: {unitCounts["cat"]}");
     }
 }
