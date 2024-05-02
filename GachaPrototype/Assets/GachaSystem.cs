@@ -155,23 +155,7 @@ public class GachaSystem : MonoBehaviour
     }
 
 
-    private void PerformPulls(int numberOfPulls, float commonOdds, float rareOdds, float ultraRareOdds)
-    {
-        for (int i = 0; i < numberOfPulls; i++)
-        {
-            if (pullsSinceLastUltraRare >= 49) // Check if 50 pulls have been made without an Ultra Rare
-            {
-                PullGacha(0f, 0f, 1f); // Force an Ultra Rare pull
-                pullsSinceLastUltraRare = 0; // Reset counter
-            }
-            else
-            {
-                PullGacha(commonOdds, rareOdds, ultraRareOdds);
-                pullsSinceLastUltraRare++;
-            }
-        }
-        totalPulls += numberOfPulls;
-    }
+
 
 
 
